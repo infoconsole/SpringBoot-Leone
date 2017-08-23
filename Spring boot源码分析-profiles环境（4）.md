@@ -378,7 +378,7 @@ protected void prepareRefresh() {
 
 -   先看使用
 
-![](media/15032928377111/15034625668343.jpg)
+![](http://osgqa4bwf.bkt.clouddn.com/2017-08-23-15034625668343.jpg)
 
 
 HelloController
@@ -453,7 +453,244 @@ Hello World--this is dev profiles
 
 得到的结果是
 Hello World--this is prod profiles
-![](media/15032928377111/15034628139204.jpg)
+![](http://osgqa4bwf.bkt.clouddn.com/2017-08-23-15034628139204.jpg)
+
+
+### springboot中profiles加载分析
+我么看springboot的启动代码中，run方法的代码:
+
+```
+public ConfigurableApplicationContext run(String... args) {
+		······
+		try {
+        
+			ApplicationArguments applicationArguments = new DefaultApplicationArguments(
+					args);
+			//创建容器的环境
+			ConfigurableEnvironment environment = prepareEnvironment(listeners,
+					applicationArguments);
+			Banner printedBanner = printBanner(environment);
+			//启动ApplicationContext
+			context = createApplicationContext();
+			//创建故障分析器
+			analyzers = new FailureAnalyzers(context);
+			prepareContext(context, environment, listeners, applicationArguments,
+			······
+			return context;
+		}
+		catch (Throwable ex) {
+			handleRunFailure(context, listeners, analyzers, ex);
+			throw new IllegalStateException(ex);
+		}
+	}
+```
+-   1我们先看环境的创建
+
+```
+	private ConfigurableEnvironment prepareEnvironment(
+			SpringApplicationRunListeners listeners,
+			ApplicationArguments applicationArguments) {
+		// Create and configure the environment
+		//创建默认的ConfigurableEnvironment  根据是否是web环境创建
+		ConfigurableEnvironment environment = getOrCreateEnvironment();
+		//默认的环境参数设置
+		configureEnvironment(environment, applicationArguments.getSourceArgs());
+		//springboot使用SpringApplicationRunListeners通知机制 在环境创建完成进行了设置
+		listeners.environmentPrepared(environment);
+		if (isWebEnvironment(environment) && !this.webEnvironment) {
+			environment = convertToStandardEnvironment(environment);
+		}
+		return environment;
+	}
+```
+首先创建一个默认的环境，根据启动的容器是否是web容器创建StandardServletEnvironment 或者StandardEnvironment
+
+```
+	private ConfigurableEnvironment getOrCreateEnvironment() {
+		if (this.environment != null) {
+			return this.environment;
+		}
+		if (this.webEnvironment) {
+			return new StandardServletEnvironment();
+		}
+		return new StandardEnvironment();
+	}
+```
+查看类的模型结构
+![](http://osgqa4bwf.bkt.clouddn.com/2017-08-23-15034671395261.jpg)
+可知和在spring容器中启动的事一样的，我么可以预见在启动完成以后系统参数systemProperties，systemEnvironment已经存在
+![](http://osgqa4bwf.bkt.clouddn.com/2017-08-23-15034673505380.jpg)
+
+-   2然后进行容器的本地设置configureEnvironment
+
+
+```
+	protected void configureEnvironment(ConfigurableEnvironment environment,
+			String[] args) {
+		configurePropertySources(environment, args);
+		//profiles
+		configureProfiles(environment, args);
+	}
+```
+
+首先进行陪PropertySources设置，如果有设置defaultProperties，那么增加defaultProperties这个source选项（一般情况没有进行设置）
+
+然后看传入的参数，保存为commandLineArgs的PropertySources
+注意：添加的位置是在第一个（优先级最高）,当运行参数program arguments中设置--spring.profiles.active="prod" 时也能生效，而且优先级别最高，但是一般不建议这个么设置
+
+```
+	protected void configurePropertySources(ConfigurableEnvironment environment,
+			String[] args) {
+		MutablePropertySources sources = environment.getPropertySources();
+		//设置默认的defaultProperties属性
+		if (this.defaultProperties != null && !this.defaultProperties.isEmpty()) {
+			sources.addLast(
+					new MapPropertySource("defaultProperties", this.defaultProperties));
+		}
+		//增加参数的defaultProperties
+		if (this.addCommandLineProperties && args.length > 0) {
+			String name = CommandLinePropertySource.COMMAND_LINE_PROPERTY_SOURCE_NAME;
+			if (sources.contains(name)) {
+				PropertySource<?> source = sources.get(name);
+				CompositePropertySource composite = new CompositePropertySource(name);
+				composite.addPropertySource(new SimpleCommandLinePropertySource(
+						name + "-" + args.hashCode(), args));
+				composite.addPropertySource(source);
+				sources.replace(name, composite);
+			}
+			else {
+				sources.addFirst(new SimpleCommandLinePropertySource(args));
+			}
+		}
+	}
+```
+
+进行profiles的设置configureProfiles，主要是初始化设置一下setActiveProfiles（可以从系统参数中取出spring.profiles.active设置到Environment环境的activeProfiles中去），使用了
+environment.setActiveProfiles  说明是重置不是增加profiles
+
+```
+	protected void configureProfiles(ConfigurableEnvironment environment, String[] args) {
+		environment.getActiveProfiles(); // ensure they are initialized
+		// But these ones should go first (last wins in a property key clash)
+		Set<String> profiles = new LinkedHashSet<String>(this.additionalProfiles);
+		profiles.addAll(Arrays.asList(environment.getActiveProfiles()));
+		environment.setActiveProfiles(profiles.toArray(new String[profiles.size()]));
+	}
+```
+结合这个environment.getActiveProfiles方法我们可以知道，主要功能是获取了一下系统参数进行设置，当profiles已经设置过就把原来的取出来设置回去，其实没有变化
+
+```
+	@Override
+	public String[] getActiveProfiles() {
+		return StringUtils.toStringArray(doGetActiveProfiles());
+	}
+
+	protected Set<String> doGetActiveProfiles() {
+		synchronized (this.activeProfiles) {
+			if (this.activeProfiles.isEmpty()) {
+				String profiles = getProperty(ACTIVE_PROFILES_PROPERTY_NAME);
+				if (StringUtils.hasText(profiles)) {
+					setActiveProfiles(StringUtils.commaDelimitedListToStringArray(
+							StringUtils.trimAllWhitespace(profiles)));
+				}
+			}
+			return this.activeProfiles;
+		}
+	}
+```
+
+-   3springboot使用SpringApplicationRunListeners通知机制 springboot默认使用了EventPublishingRunListener作为事件通知的统一通知入口 	
+```
+listeners.environmentPrepared(environment);
+```	    
+
+当容器环境准备通知完成以后，EventPublishingRunListener负责向所有的ApplicationListener发出environmentPrepared的通知，事件为
+ApplicationEnvironmentPreparedEvent  springboot的环境准备事件
+
+
+SimpleApplicationEventMulticaster
+
+```
+	public void environmentPrepared(ConfigurableEnvironment environment) {
+		this.initialMulticaster.multicastEvent(new ApplicationEnvironmentPreparedEvent(
+				this.application, this.args, environment));
+	}
+	
+		@Override
+	public void multicastEvent(ApplicationEvent event) {
+		multicastEvent(event, resolveDefaultEventType(event));
+	}
+
+	@Override
+	public void multicastEvent(final ApplicationEvent event, ResolvableType eventType) {
+		ResolvableType type = (eventType != null ? eventType : resolveDefaultEventType(event));
+		for (final ApplicationListener<?> listener : getApplicationListeners(event, type)) {
+			Executor executor = getTaskExecutor();
+			if (executor != null) {
+				executor.execute(new Runnable() {
+					@Override
+					public void run() {
+						invokeListener(listener, event);
+					}
+				});
+			}
+			else {
+				invokeListener(listener, event);
+			}
+		}
+	}
+	
+	protected void invokeListener(ApplicationListener listener, ApplicationEvent event) {
+		ErrorHandler errorHandler = getErrorHandler();
+		if (errorHandler != null) {
+			try {
+				listener.onApplicationEvent(event);
+			}
+			catch (Throwable err) {
+				errorHandler.handleError(err);
+			}
+		}
+		else {
+			try {
+				listener.onApplicationEvent(event);
+			}
+			catch (ClassCastException ex) {
+				String msg = ex.getMessage();
+				if (msg == null || msg.startsWith(event.getClass().getName())) {
+					// Possibly a lambda-defined listener which we could not resolve the generic event type for
+					Log logger = LogFactory.getLog(getClass());
+					if (logger.isDebugEnabled()) {
+						logger.debug("Non-matching event type for listener: " + listener, ex);
+					}
+				}
+				else {
+					throw ex;
+				}
+			}
+		}
+	}
+```
+
+然后我们查看，所有的ApplicationListener中，可以处理ApplicationEnvironmentPreparedEvent事件的Listener,
+从springboot源码的启动分析中我们可以看到
+springboot启动的时候已经扫描所有的Listener
+
+SpringApplication.java
+
+```
+	private void initialize(Object[] sources) {
+		······
+		//设置ApplicationListener接口的bean
+		setListeners((Collection) getSpringFactoriesInstances(ApplicationListener.class));
+		······
+	}
+```
+
+可以在spring-boot的spring.factories文件中找到ConfigFileApplicationListener作为环境准备完成以后的properties加载入库，默认的加载环境为  application.properties或者application.yml
+
+我们知道了配置文件加载的方式
+具体的加载看对ConfigFileApplicationListener的分析
+
 
 
 
