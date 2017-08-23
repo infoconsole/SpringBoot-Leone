@@ -375,28 +375,85 @@ protected void prepareRefresh() {
 -   总结分析 ，在spring中，所有的profiles都是存在environment环境中的，只要保证context在新建完成以后设置生效profiles，就可以应用于整个系统。
 
 ###     springboot中profiles的环境应用
-先看使用
 
-![](http://osgqa4bwf.bkt.clouddn.com/2017-08-23-15034579973231.jpg)
+-   先看使用
+
+![](media/15032928377111/15034625668343.jpg)
+
 
 HelloController
 ```
 package com.leone.chapter.profiles.web;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 public class HelloController {
 
+	@Value("${profiles.load.name}")
+	private String name;
+
     @RequestMapping("/hello")
     public String index() {
-        return "Hello World";
-    }
+		return "Hello World--" + name;
+	}
+
+	public String getName() {
+		return name;
+	}
+
+	public void setName(String name) {
+		this.name = name;
+	}
+}
+```
+
+ChapterProfilesApplication
+
+```
+package com.leone.chapter.profiles;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class ChapterProfilesApplication {
+
+	public static void main(String[] args) {
+		SpringApplication.run(ChapterProfilesApplication.class, args);
+	}
 
 }
 ```
 
-[1111](https://github.com/infoconsole/spring-boot.git)
+application.properties
+```
+server.context-path=/
+server.port=8080
+spring.profiles.active=dev
+```
+
+application-dev.properties
+```
+profiles.load.name= this is dev profiles
+```
+
+application-prod.properties
+```
+profiles.load.name= this is prod profiles
+```
+
+当我么访问的时候，返回的是
+Hello World--this is dev profiles
+
+
+-   当在启动参数中配置
+
+得到的结果是
+Hello World--this is prod profiles
+![](media/15032928377111/15034628139204.jpg)
+
 
 
