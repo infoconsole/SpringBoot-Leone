@@ -9,6 +9,7 @@ bin
 /*/logback
 *target*
 *asta.bak*
+media
 
 # eclipse specific git ignore
 *.pydevproject
