@@ -16,4 +16,5 @@
    5.   [Spring boot源码分析-profiles环境（4）](https://github.com/infoconsole/SpringBoot-Leone/blob/master/Spring%20boot%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90-profiles%E7%8E%AF%E5%A2%83%EF%BC%884%EF%BC%89.md)
    6. [Spring boot源码分析-ApplicationListener应用环境（5）](https://github.com/infoconsole/SpringBoot-Leone/blob/master/Spring%20boot%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90-ApplicationListener%E5%BA%94%E7%94%A8%E7%8E%AF%E5%A2%83%EF%BC%885%EF%BC%89.md)
    7. [Spring boot源码分析-log日志系统（6）](https://github.com/infoconsole/SpringBoot-Leone/blob/master/Spring%20boot%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90-log%E6%97%A5%E5%BF%97%E7%B3%BB%E7%BB%9F%EF%BC%886%EF%BC%89.md)
+   8. [Spring boot源码分析-SpringBootApplication注解（8）](https://github.com/infoconsole/SpringBoot-Leone/blob/master/Spring%20boot%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90-SpringBootApplication%E6%B3%A8%E8%A7%A3%EF%BC%888%EF%BC%89.md)
 
